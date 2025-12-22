@@ -317,8 +317,8 @@ const ProductDetail = () => {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Left Column - Images */}
-            <div>
+            {/* Left Column - Images (sticky on large screens) */}
+            <div className="lg:sticky lg:top-20 lg:self-start">
               {/* Main Image */}
               <div className="relative rounded-lg overflow-hidden mb-4">
                 <img
@@ -401,8 +401,8 @@ const ProductDetail = () => {
               )}
             </div>
 
-            {/* Right Column - Product Info */}
-            <div>
+            {/* Right Column - Product Info (scrollable on large screens) */}
+            <div className="lg:max-h-[calc(100vh-5rem)] lg:overflow-auto lg:pr-4">
               {/* Product Name */}
               <h1 className="text-2xl font-bold text-gray-800 mb-2">{product.name}</h1>
               {product.brand && (
