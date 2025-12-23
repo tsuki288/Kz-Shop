@@ -1,13 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from './components/layout/Header';
 import ProductCard from './components/product/ProductCard';
 import CartSidebar from './components/cart/ CartSidebar';
 import Footer from './components/layout/Footer';
+import Toast from './components/ui/Toast';
 // ADD THIS IMPORT:
 import { products } from './data/products';
 
 function App() {
   const [isCartOpen, setIsCartOpen] = useState(false);
+
+  useEffect(() => {
+    const handler = () => setIsCartOpen(true);
+    window.addEventListener('open-cart', handler);
+    return () => window.removeEventListener('open-cart', handler);
+  }, []);
   
   // USE YOUR REAL PRODUCTS INSTEAD OF SAMPLE:
   const allProducts = products; // This uses your products.js data
@@ -32,6 +39,7 @@ function App() {
 
       <Footer />
       <CartSidebar isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
+      <Toast />
     </div>
   );
 }

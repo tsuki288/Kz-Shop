@@ -10,21 +10,35 @@ const ProductCard = ({ product }) => {
   const navigate = useNavigate();
   const cartItems = useSelector(state => state.cart.items);
   
-  const isInCart = cartItems.some(item => item.id === product.id);
+  const isInCart = cartItems.some(item => item.id === product.id && (!item.options || Object.keys(item.options).length === 0));
   
   // Debug: Check product images
   console.log(`Product ${product.id} images:`, product.images);
   
   const handleAddToCart = (e) => {
     e.stopPropagation();
+
+    // If this product requires customization, redirect to detail so user can fill required fields
+    if (product.hasCustomization) {
+      navigate(`/product/${product.id}`);
+      return;
+    }
+
+    // Respect minimum order quantity when quick-adding
+    const quantity = product.minQuantity && product.minQuantity > 1 ? product.minQuantity : 1;
+
     dispatch(addToCart({
       id: product.id,
       name: product.name,
       price: product.price,
       image: product.images?.[0] || 'https://via.placeholder.com/300',
       discount: product.discount,
+      quantity,
     }));
-  };
+
+    // Show toast with "View Cart" action
+    window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: `Added to cart (${quantity})`, actionLabel: 'View Cart', actionEvent: 'open-cart', duration: 3000 } }));
+  }; 
 
   const handleCardClick = () => {
     navigate(`/product/${product.id}`);

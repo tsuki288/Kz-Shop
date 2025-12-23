@@ -113,9 +113,9 @@ const CartSidebar = ({ isOpen, onClose }) => {
                         <h4 className="font-medium text-gray-800 truncate">{item.name}</h4>
                         {item.options && (
                           <div className="text-xs text-gray-500 mt-1">
-                            {item.options.type && <div>Type: {item.options.type}</div>}
-                            {item.options.finish && <div>Finish: {item.options.finish}</div>}
-                            {item.options.thickness && <div>Thickness: {item.options.thickness}</div>}
+                            {item.options.type && <div>Type: {item.options.type.name || item.options.type}</div>}
+                            {item.options.finish && <div>Finish: {item.options.finish.name || item.options.finish}</div>}
+                            {item.options.thickness && <div>Thickness: {item.options.thickness.name || item.options.thickness}</div>}
                             {item.options.theme && (
                               <div className="mt-1">
                                 <img src={item.options.theme} alt="theme" className="w-12 h-8 object-cover rounded" />

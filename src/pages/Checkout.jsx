@@ -11,7 +11,9 @@ const Checkout = () => {
   const { items, totalPrice } = useSelector(state => state.cart);
   const [step, setStep] = useState(1); // 1: Address, 2: Payment, 3: Confirm
   const [orderComplete, setOrderComplete] = useState(false);
+  const [lastOrder, setLastOrder] = useState(null);
   const [customizations, setCustomizations] = useState({});
+  const MESSENGER_THREAD_ID = '502586899604742'; // messenger thread/page id - change if needed
 
   // Form states
   const [address, setAddress] = useState({
@@ -28,8 +30,12 @@ const Checkout = () => {
     method: 'cod', // cod, gcash, bank
     cardNumber: '',
     expiry: '',
-    cvv: ''
+    cvv: '',
+    screenshot: null // base64 or data URL of payment proof
   });
+
+  // Replace with your actual GCash payment link or deeplink
+  const GCASH_PAYMENT_LINK = 'https://www.gcash.com/';
 
   const calculateTotals = () => {
     const subtotal = totalPrice;
@@ -49,16 +55,105 @@ const Checkout = () => {
 
   const handlePaymentSubmit = (e) => {
     e.preventDefault();
+
+    // If payment requires prepayment (bank/gcash), ensure screenshot proof is uploaded
+    if ((payment.method === 'gcash' || payment.method === 'bank') && !payment.screenshot) {
+      window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Please upload payment screenshot for 50% downpayment', duration: 3000 } }));
+      return;
+    }
+
     setStep(3);
+  };
+
+  // Helper: get friendly theme name from URL (if theme is an image URL)
+  const getThemeName = (url) => {
+    if (!url) return '';
+    const parts = url.split('/');
+    const fname = parts[parts.length - 1] || url;
+    const name = fname.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+    return name.charAt(0).toUpperCase() + name.slice(1);
+  };
+
+  const composeOrderMessage = (orderId, orderData) => {
+    const { items: orderItems, address: a, payment: p, totals: t } = orderData;
+
+    const itemsText = orderItems.map((it, idx) => {
+      const opts = [];
+      if (it.options?.type) opts.push(`Type: ${it.options.type.name || it.options.type}`);
+      if (it.options?.finish) opts.push(`Finish: ${it.options.finish.name || it.options.finish}`);
+      if (it.options?.thickness) opts.push(`Thickness: ${it.options.thickness.name || it.options.thickness}`);
+
+      let themeUrlLine = '';
+      if (it.options?.theme) {
+        const th = it.options.theme;
+        if (typeof th === 'object') {
+          if (th.name) opts.push(`Theme: ${th.name}`);
+          if (th.url) themeUrlLine = `Theme image: ${th.url}`;
+        } else if (typeof th === 'string') {
+          const isUrl = /^https?:\/\//.test(th);
+          const label = isUrl ? getThemeName(th) : th;
+          opts.push(`Theme: ${label}`);
+          if (isUrl) themeUrlLine = `Theme image: ${th}`;
+        }
+      }
+
+      const optText = opts.length ? `\n${opts.join('\n')}` : '';
+
+      const extras = [];
+      if (it.options?.designNotes) extras.push(`Design Notes: ${it.options.designNotes}`);
+      if (it.options?.instructions) extras.push(`Instructions: ${it.options.instructions}`);
+      if (it.options?.babyName) extras.push(`Baby Name: ${it.options.babyName}`);
+      if (it.options?.eventDate) extras.push(`Event Date: ${it.options.eventDate}`);
+      if (it.options?.themeTextField) extras.push(`Theme Text: ${it.options.themeTextField}`);
+      if (it.options?.changeOutfit) extras.push(`Outfit Change: ${it.options.changeOutfit}${it.options.changeOutfit === 'yes' && it.options.preferredOutfit ? ` (Type: ${it.options.preferredOutfit})` : ''}`);
+
+      const extraText = extras.length ? `\n\n${extras.join('\n')}` : '';
+      const themeUrlText = themeUrlLine ? `\n${themeUrlLine}` : '';
+
+      return `${idx + 1}. ${it.name}\nQty: ${it.quantity}${optText}\nItem Total: ₱${(it.price * it.quantity).toFixed(2)}${themeUrlText}${extraText}`;
+    }).join('\n\n');
+
+    const total = t.total.toFixed(2);
+    const down = Math.round(parseFloat(t.total) * 0.5);
+
+    const paymentProofText = p.screenshot ? 'Payment Proof: Uploaded' : 'Payment Proof: Not provided';
+
+    const msg = `REF MAGNET ORDER\n\nOrder ID: ${orderId}\n\n${itemsText}\n\nTotal: ₱${total}\n50% Downpayment: ₱${down}\n\nShipping To:\n${a.fullName}\n${a.phone}\n${a.address}, ${a.city}, ${a.province} ${a.zipCode}\n\nPayment Method: ${p.method}\n${paymentProofText}\n\nPlease send:\n• Payment screenshot sent here\n• Baby photo\n• Outfit reference image\n\nThank you for trusting KZ Crafty | KZ Mart`;
+
+    return msg;
+  };
+
+  const handleSendOrderToMessenger = async (orderId, orderData) => {
+    const text = composeOrderMessage(orderId, orderData);
+    const url = `https://www.messenger.com/t/${MESSENGER_THREAD_ID}/?text=${encodeURIComponent(text)}`;
+
+    const win = window.open(url, '_blank');
+    if (win) {
+      window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Opening Messenger...', duration: 2000 } }));
+    } else {
+      try {
+        await navigator.clipboard.writeText(text);
+        window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Message copied to clipboard — paste into Messenger', duration: 3500 } }));
+      } catch (err) {
+        window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Unable to open Messenger or copy. Please manually copy the message.', duration: 3500 } }));
+      }
+    }
   };
 
   const handlePlaceOrder = () => {
     // In real app, send order to backend
     console.log('Order placed:', { address, payment, items });
-    
+
     // Generate order ID
     const orderId = 'ORD-' + Date.now();
-    
+
+    // Snapshot order data so we can resend after clearing cart
+    const orderData = { items: items.map(i => ({ ...i })), address: { ...address }, payment: { ...payment }, totals };
+    setLastOrder({ orderId, ...orderData });
+
+    // Send to Messenger automatically (user clicked Place Order)
+    handleSendOrderToMessenger(orderId, orderData);
+
     // Clear cart and show success
     dispatch(clearCart());
     setOrderComplete(true);
@@ -130,6 +225,18 @@ const Checkout = () => {
               className="bg-white text-orange-500 border border-orange-500 px-8 py-3 rounded-lg font-bold hover:bg-orange-50"
             >
               View Order Details
+            </button>
+            <button
+              onClick={() => {
+                if (lastOrder) {
+                  handleSendOrderToMessenger(lastOrder.orderId, lastOrder);
+                } else {
+                  window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'No order available to send', duration: 2500 } }));
+                }
+              }}
+              className="bg-blue-600 text-white px-8 py-3 rounded-lg font-bold hover:bg-blue-700"
+            >
+              Send to Messenger
             </button>
           </div>
         </div>
@@ -320,9 +427,45 @@ const Checkout = () => {
                       />
                       <div>
                         <p className="font-medium">GCash</p>
-                        <p className="text-sm text-gray-500">Pay via GCash mobile app</p>
+                        <p className="text-sm text-gray-500">Pay via GCash mobile app — pay 50% downpayment and upload proof</p>
                       </div>
                     </label>
+
+                    {payment.method === 'gcash' && (
+                      <div className="mb-6 p-4 bg-yellow-50 rounded-lg">
+                        <p className="font-medium mb-2">GCash Payment</p>
+                        <p className="text-sm text-gray-500 mb-3">Open GCash or scan the QR to pay 50% downpayment:</p>
+
+                        <div className="flex items-start gap-4">
+                          <div>
+                            <img src="public/gcash-qr.jpg" alt="GCash QR" className="w-36 h-36 object-cover rounded border cursor-pointer" onClick={() => window.open(GCASH_PAYMENT_LINK, '_blank')} />
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm mb-2">Or open GCash:</p>
+                            <button onClick={() => window.open(GCASH_PAYMENT_LINK, '_blank')} className="bg-green-600 text-white px-3 py-2 rounded">Open GCash</button>
+
+                            <div className="mt-4">
+                              <label className="block text-sm font-medium mb-2">Upload Payment Screenshot (required)</label>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={async (e) => {
+                                  const f = e.target.files?.[0];
+                                  if (!f) return;
+                                  const reader = new FileReader();
+                                  reader.onload = () => setPayment(prev => ({ ...prev, screenshot: reader.result }));
+                                  reader.readAsDataURL(f);
+                                }}
+                                className="w-full"
+                              />
+                              {payment.screenshot && (
+                                <img src={payment.screenshot} alt="payment proof" className="mt-3 w-36 h-24 object-cover rounded border" />
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     
                     {/* Bank Transfer */}
                     <label className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50">
@@ -346,7 +489,26 @@ const Checkout = () => {
                       <p className="font-medium mb-2">Bank Account Details:</p>
                       <p className="text-sm">BPI: 1234-5678-90 (Juan Dela Cruz)</p>
                       <p className="text-sm">BDO: 0987-6543-21 (Juan Dela Cruz)</p>
-                      <p className="text-sm mt-2">Send screenshot of payment to our Facebook page</p>
+                      <p className="text-sm mt-2">Pay 50% downpayment (shown on right). Please upload a screenshot of your payment below.</p>
+
+                      <div className="mt-3">
+                        <label className="block text-sm font-medium mb-2">Upload Payment Screenshot (required)</label>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={async (e) => {
+                            const f = e.target.files?.[0];
+                            if (!f) return;
+                            const reader = new FileReader();
+                            reader.onload = () => setPayment(prev => ({ ...prev, screenshot: reader.result }));
+                            reader.readAsDataURL(f);
+                          }}
+                          className="w-full"
+                        />
+                        {payment.screenshot && (
+                          <img src={payment.screenshot} alt="payment proof" className="mt-3 w-36 h-24 object-cover rounded border" />
+                        )}
+                      </div>
                     </div>
                   )}
                   
@@ -393,9 +555,9 @@ const Checkout = () => {
                             <p className="font-medium">{item.name}</p>
                             {item.options && (
                               <div className="text-xs text-gray-500">
-                                {item.options.type && <div>Type: {item.options.type}</div>}
-                                {item.options.finish && <div>Finish: {item.options.finish}</div>}
-                                {item.options.thickness && <div>Thickness: {item.options.thickness}</div>}
+                                {item.options.type && <div>Type: {item.options.type.name || item.options.type}</div>}
+                                {item.options.finish && <div>Finish: {item.options.finish.name || item.options.finish}</div>}
+                                {item.options.thickness && <div>Thickness: {item.options.thickness.name || item.options.thickness}</div>}
                                 {item.options.theme && (
                                   <div className="mt-1">
                                     <img src={item.options.theme} alt="theme" className="w-20 h-12 object-cover rounded" />

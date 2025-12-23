@@ -202,24 +202,47 @@ const ProductDetail = () => {
       options,
       quantity,
     }));
+    // Show toast instead of auto-opening cart. Include a "View Cart" action.
+    window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Added to cart', actionLabel: 'View Cart', actionEvent: 'open-cart', duration: 3000 } }));
 
-    // Keep Add to Cart silent for UX (no alert)
+    // Keep Add to Cart silent for UX (no alert) 
   };
 
   // BUY NOW - open design details modal (validate required customization if present)
   const handleBuyNow = () => {
-    if (product?.hasCustomization && !isCustomizationComplete()) {
-      alert('Please select all required customization options before proceeding.');
+    // If product requires customization, open the design modal to collect required details
+    if (product?.hasCustomization) {
+      if (!isCustomizationComplete()) {
+        alert('Please select all required customization options before proceeding.');
+        return;
+      }
+
+      // If product has minQuantity, ensure quantity meets it
+      if (product?.minQuantity && quantity < product.minQuantity) {
+        alert(`Minimum order for this product is ${product.minQuantity} pcs.`);
+        return;
+      }
+
+      setShowDesignForm(true);
       return;
     }
 
-    // If product has minQuantity, ensure quantity meets it
-    if (product?.minQuantity && quantity < product.minQuantity) {
-      alert(`Minimum order for this product is ${product.minQuantity} pcs.`);
-      return;
-    }
+    // Non-customized product: add to cart and go straight to checkout (Buy Now behavior)
+    const unitPrice = product.price + computeOptionsPrice();
 
-    setShowDesignForm(true);
+    dispatch(addToCart({
+      id: product.id,
+      name: product.name,
+      price: unitPrice,
+      image: product.images?.[0] || 'https://via.placeholder.com/300',
+      discount: product.discount,
+      options: {},
+      quantity,
+    }));
+
+    // Show toast and navigate to checkout
+    window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: `Added to cart (${quantity})`, actionLabel: 'View Cart', actionEvent: 'open-cart', duration: 3000 } }));
+    navigate('/checkout');
   };
 
  const handleProceedToPayment = () => {
@@ -612,6 +635,7 @@ const ProductDetail = () => {
                   <FiShoppingCart size={20} />
                   <span>ADD TO CART</span>
                 </button>
+
                 <button
                   onClick={handleBuyNow}
                   className="flex-1 bg-orange-500 text-white py-3 rounded-lg font-bold hover:bg-orange-600 transition-colors"
