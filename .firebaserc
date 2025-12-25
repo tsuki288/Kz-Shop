@@ -1,0 +1,9 @@
+{
+  "projects": {
+    "default": "kz-shop",
+    "ks-shopee": "ks-shopee",
+    "kz-crafting": "kz-crafting"
+  },
+  "targets": {},
+  "etags": {}
+}

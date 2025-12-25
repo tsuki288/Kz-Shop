@@ -123,22 +123,42 @@ const Checkout = () => {
     return msg;
   };
 
-  const handleSendOrderToMessenger = async (orderId, orderData) => {
-    const text = composeOrderMessage(orderId, orderData);
-    const url = `https://www.messenger.com/t/${MESSENGER_THREAD_ID}/?text=${encodeURIComponent(text)}`;
-
-    const win = window.open(url, '_blank');
-    if (win) {
-      window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Opening Messenger...', duration: 2000 } }));
-    } else {
-      try {
-        await navigator.clipboard.writeText(text);
-        window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Message copied to clipboard — paste into Messenger', duration: 3500 } }));
-      } catch (err) {
-        window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Unable to open Messenger or copy. Please manually copy the message.', duration: 3500 } }));
-      }
+const handleSendOrderToMessenger = async (orderId, orderData) => {
+  const text = composeOrderMessage(orderId, orderData);
+  
+  // ALWAYS use m.me - it works on both mobile and desktop
+  const universalUrl = `https://m.me/${MESSENGER_THREAD_ID}?text=${encodeURIComponent(text)}`;
+  
+  const win = window.open(universalUrl, '_blank');
+  if (win) {
+    window.dispatchEvent(new CustomEvent('show-toast', { 
+      detail: { 
+        message: 'Opening Messenger...', 
+        duration: 2000 
+      } 
+    }));
+  } else {
+    try {
+      await navigator.clipboard.writeText(text);
+      window.dispatchEvent(new CustomEvent('show-toast', { 
+        detail: { 
+          message: '📱 On Mobile: Open Messenger app and paste\n💻 On Desktop: Open messenger.com and paste', 
+          duration: 5000 
+        } 
+      }));
+    } catch (err) {
+      window.dispatchEvent(new CustomEvent('show-toast', { 
+        detail: { 
+          message: 'Unable to open Messenger. Please manually copy:', 
+          duration: 3500 
+        } 
+      }));
+      
+      // Show message in a textarea for easy copying
+      showManualCopyModal(text);
     }
-  };
+  }
+};
 
   const handlePlaceOrder = () => {
     // In real app, send order to backend
@@ -259,7 +279,7 @@ const Checkout = () => {
           
           <div className="flex items-center space-x-2">
             <div className="w-10 h-10 bg-orange-500 rounded-lg"></div>
-            <span className="text-2xl font-bold text-orange-500">KsShop</span>
+            <span className="text-2xl font-bold text-orange-500">Kz-Shop</span>
           </div>
         </div>
 
@@ -558,11 +578,6 @@ const Checkout = () => {
                                 {item.options.type && <div>Type: {item.options.type.name || item.options.type}</div>}
                                 {item.options.finish && <div>Finish: {item.options.finish.name || item.options.finish}</div>}
                                 {item.options.thickness && <div>Thickness: {item.options.thickness.name || item.options.thickness}</div>}
-                                {item.options.theme && (
-                                  <div className="mt-1">
-                                    <img src={item.options.theme} alt="theme" className="w-20 h-12 object-cover rounded" />
-                                  </div>
-                                )}
                               </div>
                             )}
                             <p className="text-sm text-gray-500">Quantity: {item.quantity}</p>

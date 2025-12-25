@@ -16,7 +16,7 @@ const Header = ({ onCartClick }) => {  // <-- ADD THIS PROP
             
             <div className="flex items-center space-x-2">
               <div className="w-8 h-8 bg-orange-500 rounded-lg"></div>
-              <span className="text-xl font-bold text-orange-500">KsShop</span>
+              <span className="text-xl font-bold text-orange-500">Kz Crafting</span>
             </div>
           </div>
 
